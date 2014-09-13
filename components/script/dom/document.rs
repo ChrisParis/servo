@@ -44,6 +44,7 @@ use dom::location::Location;
 use dom::mouseevent::MouseEvent;
 use dom::node::{Node, ElementNodeTypeId, DocumentNodeTypeId, NodeHelpers};
 use dom::node::{CloneChildren, DoNotCloneChildren};
+use dom::nodeiterator::NodeIterator;
 use dom::nodelist::NodeList;
 use dom::text::Text;
 use dom::processinginstruction::ProcessingInstruction;
@@ -603,6 +604,12 @@ impl<'a> DocumentMethods for JSRef<'a, Document> {
     // http://dom.spec.whatwg.org/#dom-document-createrange
     fn CreateRange(self) -> Temporary<Range> {
         Range::new(self)
+    }
+
+    // http://dom.spec.whatwg.org/#dom-document-createnodeiterator
+    fn CreateNodeIterator(&self, root: JSRef<Node>, whatToShow: u32, filter: Option<NodeFilter>)
+                          -> Temporary<NodeIterator> {
+        NodeIterator::new(self, root, whatToShow, filter)
     }
 
     // http://dom.spec.whatwg.org/#dom-document-createtreewalker
