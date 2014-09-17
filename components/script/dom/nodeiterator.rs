@@ -34,7 +34,7 @@ pub struct NodeIterator {
     pub reflector_: Reflector,
     pub root_node: JS<Node>,
     pub reference_node: Cell<JS<Node>>,
-    pub pointer_before_reference_node: bool,
+    pub pointer_before_reference_node: Cell<bool>,
     pub what_to_show: u32,
     pub filter: Filter
 }
@@ -47,7 +47,7 @@ impl NodeIterator {
             reflector_: Reflector::new(),
             root_node: root_node.unrooted(),
             reference_node: Cell::new(root_node.unrooted()),
-            pointer_before_reference_node: true,
+            pointer_before_reference_node: Cell::new(true),
             what_to_show: what_to_show,
             filter: filter
         }
@@ -97,7 +97,7 @@ impl<'a> NodeIteratorMethods for JSRef<'a, NodeIterator> {
     }
 
     fn PointerBeforeReferenceNode(&self) -> bool {
-        self.pointer_before_reference_node
+        self.pointer_before_reference_node.get()
     }
 
     fn PreviousNode(&self) -> Fallible<Option<Temporary<Node>>> {
@@ -120,39 +120,75 @@ impl Reflectable for NodeIterator {
 }
 
 trait PrivateNodeIteratorHelpers<'a> {
-    fn traverse(&self, next: |node: &JSRef<'a, Node>| -> Option<Temporary<Node>>)
-                -> Fallible<Option<Temporary<Node>>>;
+    fn following(&self, node: &JSRef<Node>) -> Option<Temporary<Node>>;
+    fn preceding(&self, node: &JSRef<Node>) -> Option<Temporary<Node>>;
+    fn traverse(&self, direction: Direction) -> Fallible<Option<Temporary<Node>>>;
+    fn is_root_node(&self, node: &JSRef<'a, Node>) -> bool;
     fn accept_node(&self, node: &JSRef<'a, Node>) -> Fallible<u16>;
 }
 
+enum Direction {
+    Next,
+    Previous
+}
+
 impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
-    fn following(node: &JSRef<Node>) -> Option<Temporary<Node>> {
-        None
+    fn following(&self, node: &JSRef<Node>) -> Option<Temporary<Node>> {
+        match node.first_child() {
+            None => match node.next_sibling() {
+                None => {
+                    let mut candidate = *node;
+                    while !self.is_root_node(&candidate) && candidate.next_sibling().is_none() {
+                        match candidate.parent_node() {
+                            None =>
+                                // XXX can this happen in NodeIterator? Can dom modifications cause this?
+                                return None,
+                            Some(n) => candidate = n.root().clone()
+                        }
+                    }
+                    if self.is_root_node(&candidate) {
+                        None
+                    } else {
+                        candidate.next_sibling()
+                    }
+                },
+                it => it
+            },
+            it => it
+        }
     }
 
-    fn preceding(node: &JSRef<Node>) -> Option<Temporary<Node>> {
-        None
-    }
-
-    enum Direction {
-        Next,
-        Previous
+    fn preceding(&self, node: &JSRef<Node>) -> Option<Temporary<Node>> {
+        if self.is_root_node(node) {
+            None
+        } else {
+            match node.prev_sibling() {
+                Some(sibling) => {
+                    let mut node = sibling.root().clone();
+                    while node.first_child().is_some() {
+                        node = node.last_child().unwrap().root().clone()
+                    }
+                    Some(Temporary::new(node.unrooted()))
+                },
+                None => node.parent_node()
+            }
+        }
     }
 
     // http://dom.spec.whatwg.org/#concept-nodeiterator-traverse
     fn traverse(&self, direction: Direction) -> Fallible<Option<Temporary<Node>>> {
         // To traverse in direction direction run these steps:
         // Let node be the value of the referenceNode attribute.
-        val mut node = self.reference_node; // unwrap
+        let mut node = self.reference_node.get().root().clone();
         // Let before node be the value of the pointerBeforeReferenceNode attribute.
-        val mut before_node = self.pointer_before_reference_node;
+        let mut before_node = self.pointer_before_reference_node.get();
         // Run these substeps:
         loop {
             match direction {
                 // If direction is next
                 Next => match before_node {
                     // If before node is false,
-                    false => match following(node) {
+                    false => match self.following(&node) {
                         // let node be the first node following node in the iterator collection.
                         Some(n) => node = n.root().clone(),
                         // If there is no such node return null.
@@ -164,7 +200,7 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
                 // If direction is previous
                 Previous => match before_node {
                     // If before node is true,
-                    true => match preceding(node) {
+                    true => match self.preceding(&node) {
                         // let node be the first node preceding node in the iterator collection.
                         Some(n) => node = n.root().clone(),
                         // If there is no such node return null.
@@ -184,11 +220,11 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
             }
         }
         // Set the referenceNode attribute to node,
-        self.reference_node = node;
+        self.reference_node.set(node.unrooted());
         // set the pointerBeforeReferenceNode attribute to before node,
-        self.pointer_before_reference_node = before_node;
+        self.pointer_before_reference_node.set(before_node);
         // and return node.
-        Ok(Some(Temporary::new(node)))
+        Ok(Some(Temporary::new(node.unrooted())))
     }
 
     // http://dom.spec.whatwg.org/#concept-node-filter
@@ -210,6 +246,10 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
             FilterNative(f) => Ok(f(node)),
             FilterJS(callback) => callback.AcceptNode_(self, node, RethrowExceptions)
         }
+    }
+
+    fn is_root_node(&self, node: &JSRef<'a, Node>) -> bool {
+        node.unrooted() == self.root_node
     }
 }
 
