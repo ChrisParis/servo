@@ -45,8 +45,8 @@ impl NodeIterator {
                          filter: Filter) -> NodeIterator {
         NodeIterator {
             reflector_: Reflector::new(),
-            root_node: root_node.unrooted(),
-            reference_node: Cell::new(root_node.unrooted()),
+            root_node: JS::from_rooted(root_node),
+            reference_node: Cell::new(JS::from_rooted(root_node)),
             pointer_before_reference_node: Cell::new(true),
             what_to_show: what_to_show,
             filter: filter
@@ -168,7 +168,7 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
                     while node.first_child().is_some() {
                         node = node.last_child().unwrap().root().clone()
                     }
-                    Some(Temporary::new(node.unrooted()))
+                    Some(Temporary::from_rooted(&node))
                 },
                 None => node.parent_node()
             }
@@ -220,11 +220,11 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
             }
         }
         // Set the referenceNode attribute to node,
-        self.reference_node.set(node.unrooted());
+        self.reference_node.set(JS::from_rooted(&node));
         // set the pointerBeforeReferenceNode attribute to before node,
         self.pointer_before_reference_node.set(before_node);
         // and return node.
-        Ok(Some(Temporary::new(node.unrooted())))
+        Ok(Some(Temporary::from_rooted(&node)))
     }
 
     // http://dom.spec.whatwg.org/#concept-node-filter
@@ -249,7 +249,7 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
     }
 
     fn is_root_node(&self, node: &JSRef<'a, Node>) -> bool {
-        node.unrooted() == self.root_node
+        JS::from_rooted(node) == self.root_node
     }
 }
 
