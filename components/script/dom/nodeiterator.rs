@@ -11,14 +11,14 @@ use dom::bindings::codegen::Bindings::NodeFilterBinding::NodeFilter;
 // to move to the NodeFilter binding file (#3149).
 // For now, it is defined in treewalker.rs.
 use dom::treewalker::NodeFilterConstants;
-use dom::bindings::error::{ErrorResult, Fallible};
+use dom::bindings::error::Fallible;
 use dom::bindings::global::Window;
 use dom::bindings::js::{JS, JSRef, OptionalRootable, Temporary};
+use dom::bindings::trace::Untraceable;
 use dom::bindings::utils::{Reflectable, Reflector, reflect_dom_object};
 use dom::document::Document;
 use dom::node::{Node, NodeHelpers};
 
-use serialize::{Encoder, Encodable};
 use std::cell::Cell;
 
 // XXX
@@ -40,7 +40,7 @@ pub struct NodeIterator {
 }
 
 impl NodeIterator {
-    pub fn new_inherited(root_node: &JSRef<Node>,
+    pub fn new_inherited(root_node: JSRef<Node>,
                          what_to_show: u32,
                          filter: Filter) -> NodeIterator {
         NodeIterator {
@@ -53,8 +53,8 @@ impl NodeIterator {
         }
     }
 
-    pub fn new_with_filter(document: &JSRef<Document>,
-                           root_node: &JSRef<Node>,
+    pub fn new_with_filter(document: JSRef<Document>,
+                           root_node: JSRef<Node>,
                            what_to_show: u32,
                            filter: Filter) -> Temporary<NodeIterator> {
         let window = document.window.root();
@@ -63,8 +63,8 @@ impl NodeIterator {
                            NodeIteratorBinding::Wrap)
     }
 
-    pub fn new(document: &JSRef<Document>,
-               root_node: &JSRef<Node>,
+    pub fn new(document: JSRef<Document>,
+               root_node: JSRef<Node>,
                what_to_show: u32,
                node_filter: Option<NodeFilter>) -> Temporary<NodeIterator> {
         let filter = match node_filter {
@@ -76,15 +76,15 @@ impl NodeIterator {
 }
 
 impl<'a> NodeIteratorMethods for JSRef<'a, NodeIterator> {
-    fn Root(&self) -> Temporary<Node> {
+    fn Root(self) -> Temporary<Node> {
         Temporary::new(self.root_node)
     }
 
-    fn WhatToShow(&self) -> u32 {
+    fn WhatToShow(self) -> u32 {
         self.what_to_show
     }
 
-    fn GetFilter(&self) -> Option<NodeFilter> {
+    fn GetFilter(self) -> Option<NodeFilter> {
         match self.filter {
             FilterNone => None,
             FilterJS(nf) => Some(nf),
@@ -92,23 +92,23 @@ impl<'a> NodeIteratorMethods for JSRef<'a, NodeIterator> {
         }
     }
 
-    fn GetReferenceNode(&self) -> Option<Temporary<Node>> {
+    fn GetReferenceNode(self) -> Option<Temporary<Node>> {
         Some(Temporary::new(self.reference_node.get()))
     }
 
-    fn PointerBeforeReferenceNode(&self) -> bool {
+    fn PointerBeforeReferenceNode(self) -> bool {
         self.pointer_before_reference_node.get()
     }
 
-    fn PreviousNode(&self) -> Fallible<Option<Temporary<Node>>> {
+    fn PreviousNode(self) -> Fallible<Option<Temporary<Node>>> {
         self.prev_node()
     }
 
-    fn NextNode(&self) -> Fallible<Option<Temporary<Node>>> {
+    fn NextNode(self) -> Fallible<Option<Temporary<Node>>> {
         self.next_node()
     }
 
-    fn Detach(&self) {
+    fn Detach(self) {
         // "The detach() method must do nothing."
     }
 }
@@ -120,11 +120,11 @@ impl Reflectable for NodeIterator {
 }
 
 trait PrivateNodeIteratorHelpers<'a> {
-    fn following(&self, node: &JSRef<Node>) -> Option<Temporary<Node>>;
-    fn preceding(&self, node: &JSRef<Node>) -> Option<Temporary<Node>>;
-    fn traverse(&self, direction: Direction) -> Fallible<Option<Temporary<Node>>>;
-    fn is_root_node(&self, node: &JSRef<'a, Node>) -> bool;
-    fn accept_node(&self, node: &JSRef<'a, Node>) -> Fallible<u16>;
+    fn following(self, node: JSRef<Node>) -> Option<Temporary<Node>>;
+    fn preceding(self, node: JSRef<Node>) -> Option<Temporary<Node>>;
+    fn traverse(self, direction: Direction) -> Fallible<Option<Temporary<Node>>>;
+    fn is_root_node(self, node: JSRef<'a, Node>) -> bool;
+    fn accept_node(self, node: JSRef<'a, Node>) -> Fallible<u16>;
 }
 
 enum Direction {
@@ -133,12 +133,12 @@ enum Direction {
 }
 
 impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
-    fn following(&self, node: &JSRef<Node>) -> Option<Temporary<Node>> {
+    fn following(self, node: JSRef<Node>) -> Option<Temporary<Node>> {
         match node.first_child() {
             None => match node.next_sibling() {
                 None => {
-                    let mut candidate = *node;
-                    while !self.is_root_node(&candidate) && candidate.next_sibling().is_none() {
+                    let mut candidate = node;
+                    while !self.is_root_node(candidate) && candidate.next_sibling().is_none() {
                         match candidate.parent_node() {
                             None =>
                                 // XXX can this happen in NodeIterator? Can dom modifications cause this?
@@ -146,7 +146,7 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
                             Some(n) => candidate = n.root().clone()
                         }
                     }
-                    if self.is_root_node(&candidate) {
+                    if self.is_root_node(candidate) {
                         None
                     } else {
                         candidate.next_sibling()
@@ -158,7 +158,7 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
         }
     }
 
-    fn preceding(&self, node: &JSRef<Node>) -> Option<Temporary<Node>> {
+    fn preceding(self, node: JSRef<Node>) -> Option<Temporary<Node>> {
         if self.is_root_node(node) {
             None
         } else {
@@ -168,7 +168,7 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
                     while node.first_child().is_some() {
                         node = node.last_child().unwrap().root().clone()
                     }
-                    Some(Temporary::from_rooted(&node))
+                    Some(Temporary::from_rooted(node))
                 },
                 None => node.parent_node()
             }
@@ -176,7 +176,7 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
     }
 
     // http://dom.spec.whatwg.org/#concept-nodeiterator-traverse
-    fn traverse(&self, direction: Direction) -> Fallible<Option<Temporary<Node>>> {
+    fn traverse(self, direction: Direction) -> Fallible<Option<Temporary<Node>>> {
         // To traverse in direction direction run these steps:
         // Let node be the value of the referenceNode attribute.
         let mut node = self.reference_node.get().root().clone();
@@ -188,7 +188,7 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
                 // If direction is next
                 Next => match before_node {
                     // If before node is false,
-                    false => match self.following(&node) {
+                    false => match self.following(node) {
                         // let node be the first node following node in the iterator collection.
                         Some(n) => node = n.root().clone(),
                         // If there is no such node return null.
@@ -200,7 +200,7 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
                 // If direction is previous
                 Previous => match before_node {
                     // If before node is true,
-                    true => match self.preceding(&node) {
+                    true => match self.preceding(node) {
                         // let node be the first node preceding node in the iterator collection.
                         Some(n) => node = n.root().clone(),
                         // If there is no such node return null.
@@ -211,7 +211,7 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
                 }
             }
             // Filter node and let result be the return value.
-            match self.accept_node(&node) {
+            match self.accept_node(node) {
                 Err(e) => return Err(e),
                 // If result is FILTER_ACCEPT, go to the next step in the overall set of steps.
                 Ok(NodeFilterConstants::FILTER_ACCEPT) => break,
@@ -220,15 +220,15 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
             }
         }
         // Set the referenceNode attribute to node,
-        self.reference_node.set(JS::from_rooted(&node));
+        self.reference_node.set(JS::from_rooted(node));
         // set the pointerBeforeReferenceNode attribute to before node,
         self.pointer_before_reference_node.set(before_node);
         // and return node.
-        Ok(Some(Temporary::from_rooted(&node)))
+        Ok(Some(Temporary::from_rooted(node)))
     }
 
     // http://dom.spec.whatwg.org/#concept-node-filter
-    fn accept_node(&self, node: &JSRef<'a, Node>) -> Fallible<u16> {
+    fn accept_node(self, node: JSRef<'a, Node>) -> Fallible<u16> {
         // "To filter node run these steps:"
         // "1. Let n be node's nodeType attribute value minus 1."
         let n: uint = node.NodeType() as uint - 1;
@@ -243,30 +243,30 @@ impl<'a> PrivateNodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
         // "6. Return result."
         match self.filter {
             FilterNone => Ok(NodeFilterConstants::FILTER_ACCEPT),
-            FilterNative(f) => Ok(f(node)),
+            FilterNative(f) => Ok((*f)(node)),
             FilterJS(callback) => callback.AcceptNode_(self, node, RethrowExceptions)
         }
     }
 
-    fn is_root_node(&self, node: &JSRef<'a, Node>) -> bool {
+    fn is_root_node(self, node: JSRef<'a, Node>) -> bool {
         JS::from_rooted(node) == self.root_node
     }
 }
 
 pub trait NodeIteratorHelpers<'a> {
-    fn next_node(&self) -> Fallible<Option<Temporary<Node>>>;
-    fn prev_node(&self) -> Fallible<Option<Temporary<Node>>>;
+    fn next_node(self) -> Fallible<Option<Temporary<Node>>>;
+    fn prev_node(self) -> Fallible<Option<Temporary<Node>>>;
 }
 
 impl<'a> NodeIteratorHelpers<'a> for JSRef<'a, NodeIterator> {
     // http://dom.spec.whatwg.org/#dom-nodeiterator-nextnode
-    fn next_node(&self) -> Fallible<Option<Temporary<Node>>> {
+    fn next_node(self) -> Fallible<Option<Temporary<Node>>> {
         // "The nextNode() method must traverse in direction next."
         self.traverse(Next)
     }
 
     // http://dom.spec.whatwg.org/#dom-nodeiterator-previousnode
-    fn prev_node(&self) -> Fallible<Option<Temporary<Node>>> {
+    fn prev_node(self) -> Fallible<Option<Temporary<Node>>> {
         // "The previousNode() method must traverse in direction previous."
         self.traverse(Previous)
     }
@@ -290,6 +290,6 @@ impl<'a> Iterator<JSRef<'a, Node>> for JSRef<'a, NodeIterator> {
 #[jstraceable]
 pub enum Filter {
     FilterNone,
-    FilterNative(Untraceable<fn (node: &JSRef<Node>) -> u16>),
+    FilterNative(Untraceable<fn (node: JSRef<Node>) -> u16>),
     FilterJS(NodeFilter)
 }

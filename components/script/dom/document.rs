@@ -607,7 +607,7 @@ impl<'a> DocumentMethods for JSRef<'a, Document> {
     }
 
     // http://dom.spec.whatwg.org/#dom-document-createnodeiterator
-    fn CreateNodeIterator(&self, root: JSRef<Node>, whatToShow: u32, filter: Option<NodeFilter>)
+    fn CreateNodeIterator(self, root: JSRef<Node>, whatToShow: u32, filter: Option<NodeFilter>)
                           -> Temporary<NodeIterator> {
         NodeIterator::new(self, root, whatToShow, filter)
     }
