@@ -11,10 +11,10 @@ use dom::bindings::codegen::Bindings::NodeFilterBinding::NodeFilter;
 // to move to the NodeFilter binding file (#3149).
 // For now, it is defined in treewalker.rs.
 use dom::treewalker::NodeFilterConstants;
+use dom::treewalker::{Filter,FilterNone,FilterJS,FilterNative};
 use dom::bindings::error::Fallible;
 use dom::bindings::global::Window;
 use dom::bindings::js::{JS, JSRef, OptionalRootable, Temporary};
-use dom::bindings::trace::Untraceable;
 use dom::bindings::utils::{Reflectable, Reflector, reflect_dom_object};
 use dom::document::Document;
 use dom::node::{Node, NodeHelpers};
@@ -285,11 +285,4 @@ impl<'a> Iterator<JSRef<'a, Node>> for JSRef<'a, NodeIterator> {
                unreachable!()
        }
    }
-}
-
-#[jstraceable]
-pub enum Filter {
-    FilterNone,
-    FilterNative(Untraceable<fn (node: JSRef<Node>) -> u16>),
-    FilterJS(NodeFilter)
 }
