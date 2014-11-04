@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use syntax::{ast, ast_util, codemap, visit};
+use syntax::ast_util::PostExpansionMethod;
 use syntax::ast::Public;
 use syntax::attr::AttrMetaMethods;
 use rustc::lint::{Context, LintPass, LintArray};
@@ -124,6 +125,8 @@ impl LintPass for UnrootedPass {
     fn check_fn(&mut self, cx: &Context, kind: visit::FnKind, decl: &ast::FnDecl,
                 block: &ast::Block, _span: codemap::Span, _id: ast::NodeId) {
         match kind {
+            visit::FkItemFn(_, _, ast::UnsafeFn, _) => return,
+            visit::FkMethod(_, _, method) if method.pe_fn_style() == ast::UnsafeFn => return,
             visit::FkItemFn(i, _, _, _) |
             visit::FkMethod(i, _, _) if i.as_str() == "new" || i.as_str() == "new_inherited" => {
                 return;
@@ -136,6 +139,8 @@ impl LintPass for UnrootedPass {
                     lint_unrooted_ty(cx, &*arg.ty,
                                      "Type must be rooted")
                 }
+                lint_unrooted_ty(cx, &*decl.output,
+                                 "Return type must be rooted")
             }
             _ => () // fn is `unsafe`
         }

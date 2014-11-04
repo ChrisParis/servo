@@ -123,6 +123,7 @@ impl<T> PartialEq for JS<T> {
 
 impl <T> Clone for JS<T> {
     #[inline]
+    #[allow(unrooted_must_root)]
     fn clone(&self) -> JS<T> {
         JS {
             ptr: self.ptr.clone()
@@ -177,6 +178,7 @@ impl<T: Reflectable> JS<T> {
 }
 
 impl<T: Assignable<U>, U: Reflectable> JS<U> {
+    #[allow(unrooted_must_root)]
     pub fn from_rooted(root: T) -> JS<U> {
         unsafe {
             root.get_js()
@@ -187,6 +189,7 @@ impl<T: Assignable<U>, U: Reflectable> JS<U> {
 //XXXjdm This is disappointing. This only gets called from trace hooks, in theory,
 //       so it's safe to assume that self is rooted and thereby safe to access.
 impl<T: Reflectable> Reflectable for JS<T> {
+    #[allow(unrooted_must_root)]
     fn reflector<'a>(&'a self) -> &'a Reflector {
         unsafe {
             (*self.unsafe_get()).reflector()
@@ -214,6 +217,7 @@ impl<T: Assignable<U>, U: Reflectable> MutNullableJS<U> {
 }
 
 impl<T: Reflectable> Default for MutNullableJS<T> {
+    #[allow(unrooted_must_root)]
     fn default() -> MutNullableJS<T> {
         MutNullableJS {
             ptr: Cell::new(None)
@@ -550,6 +554,7 @@ impl<'a,T> JSRef<'a,T> {
         mem::transmute(self)
     }
 
+    #[allow(unrooted_must_root)]
     pub fn unrooted(&self) -> JS<T> {
         JS {
             ptr: self.ptr
@@ -566,6 +571,7 @@ impl<'a, T: Reflectable> JSRef<'a, T> {
 }
 
 impl<'a, T: Reflectable> Reflectable for JSRef<'a, T> {
+    #[allow(unrooted_must_root)]
     fn reflector<'a>(&'a self) -> &'a Reflector {
         self.deref().reflector()
     }
