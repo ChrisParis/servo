@@ -898,7 +898,7 @@ impl ScriptTask {
             parser_input = Some(HTMLInput::InputString(strval.unwrap_or("".to_owned())));
         };
 
-        parse_html(document.r(), parser_input.unwrap(), &final_url);
+        parse_html(document.r(), parser_input.unwrap(), &final_url, None);
 
         document.r().set_ready_state(DocumentReadyState::Interactive);
         self.compositor.borrow_mut().set_ready_state(pipeline_id, PerformingLayout);

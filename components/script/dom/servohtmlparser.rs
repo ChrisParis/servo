@@ -7,6 +7,7 @@
 
 use dom::bindings::cell::DOMRefCell;
 use dom::bindings::codegen::Bindings::ServoHTMLParserBinding;
+use dom::bindings::codegen::InheritTypes::NodeCast;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::trace::JSTraceable;
 use dom::bindings::js::{JS, JSRef, Temporary};
@@ -29,6 +30,16 @@ use html5ever::tree_builder::{TreeBuilder, TreeBuilderOpts};
 pub struct Sink {
     pub base_url: Option<Url>,
     pub document: JS<Document>,
+    pub root_node: JS<Node>,
+}
+
+/// FragmentContext is used only to pass this group of related values
+/// into functions.
+#[derive(Copy)]
+pub struct FragmentContext<'a> {
+    pub root_node: JSRef<'a, Node>,
+    pub context_elem: JSRef<'a, Node>,
+    pub form_elem: Option<JSRef<'a, Node>>,
 }
 
 pub type Tokenizer = tokenizer::Tokenizer<TreeBuilder<JS<Node>, Sink>>;
@@ -53,19 +64,38 @@ impl Parser for ServoHTMLParser{
 
 impl ServoHTMLParser {
     #[allow(unrooted_must_root)]
-    pub fn new(base_url: Option<Url>, document: JSRef<Document>) -> Temporary<ServoHTMLParser> {
+    pub fn new(base_url: Option<Url>, document: JSRef<Document>,
+               fragment_context: Option<FragmentContext>) -> Temporary<ServoHTMLParser> {
         let window = document.window().root();
+        let root_node: JSRef<Node> = match fragment_context {
+            None => NodeCast::from_ref(document),
+            Some(ref frag) => frag.root_node,
+        };
         let sink = Sink {
             base_url: base_url,
             document: JS::from_rooted(document),
+            root_node: JS::from_rooted(root_node),
         };
 
-        let tb = TreeBuilder::new(sink, TreeBuilderOpts {
+        let tb_opts = TreeBuilderOpts {
             ignore_missing_rules: true,
+            context_elem: fragment_context.map(|f| JS::from_rooted(f.context_elem)),
+            initial_form_elem: match fragment_context {
+                Some(FragmentContext {form_elem: Some(n), ..}) => Some(JS::from_rooted(n)),
+                _ => None,
+            },
             .. Default::default()
-        });
+        };
+        let tb = TreeBuilder::new(sink, tb_opts);
 
-        let tok = tokenizer::Tokenizer::new(tb, Default::default());
+        let tok_opts = match fragment_context {
+            None => Default::default(),
+            Some(_) => tokenizer::TokenizerOpts {
+                initial_state: Some(tb.tokenizer_state_for_context_elem()),
+                .. Default::default()
+            }
+        };
+        let tok = tokenizer::Tokenizer::new(tb, tok_opts);
 
         let parser = ServoHTMLParser {
             reflector_: Reflector::new(),

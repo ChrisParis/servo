@@ -16,7 +16,7 @@ use dom::htmlscriptelement::HTMLScriptElement;
 use dom::htmlscriptelement::HTMLScriptElementHelpers;
 use dom::node::{Node, NodeHelpers};
 use dom::servohtmlparser;
-use dom::servohtmlparser::ServoHTMLParser;
+use dom::servohtmlparser::{ServoHTMLParser, FragmentContext};
 use dom::text::Text;
 use parse::Parser;
 
@@ -57,9 +57,7 @@ impl SinkHelpers for servohtmlparser::Sink {
 
 impl<'a> TreeSink<JS<Node>> for servohtmlparser::Sink {
     fn get_document(&mut self) -> JS<Node> {
-        let doc = self.document.root();
-        let node: JSRef<Node> = NodeCast::from_ref(doc.r());
-        JS::from_rooted(node)
+        self.root_node
     }
 
     fn same_node(&self, x: JS<Node>, y: JS<Node>) -> bool {
@@ -166,8 +164,9 @@ impl<'a> TreeSink<JS<Node>> for servohtmlparser::Sink {
 
 pub fn parse_html(document: JSRef<Document>,
                   input: HTMLInput,
-                  url: &Url) {
-    let parser = ServoHTMLParser::new(Some(url.clone()), document).root();
+                  url: &Url,
+                  fragment_context: Option<FragmentContext>) {
+    let parser = ServoHTMLParser::new(Some(url.clone()), document, fragment_context).root();
     let parser: JSRef<ServoHTMLParser> = parser.r();
 
     let nested_parse = task_state::get().contains(task_state::IN_HTML_PARSER);
