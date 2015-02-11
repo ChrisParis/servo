@@ -166,7 +166,10 @@ pub fn parse_html(document: JSRef<Document>,
                   input: HTMLInput,
                   url: &Url,
                   fragment_context: Option<FragmentContext>) {
-    let parser = ServoHTMLParser::new(Some(url.clone()), document, fragment_context).root();
+    let parser = match fragment_context {
+        None => ServoHTMLParser::new(Some(url.clone()), document).root(),
+        Some(fc) => ServoHTMLParser::new_for_fragment(Some(url.clone()), document, fc).root(),
+    };
     let parser: JSRef<ServoHTMLParser> = parser.r();
 
     let nested_parse = task_state::get().contains(task_state::IN_HTML_PARSER);
