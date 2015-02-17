@@ -10,6 +10,7 @@ use dom::attr::AttrValue;
 use dom::namednodemap::NamedNodeMap;
 use dom::bindings::cell::DOMRefCell;
 use dom::bindings::codegen::Bindings::AttrBinding::AttrMethods;
+use dom::bindings::codegen::Bindings::DocumentBinding::DocumentMethods;
 use dom::bindings::codegen::Bindings::ElementBinding;
 use dom::bindings::codegen::Bindings::ElementBinding::ElementMethods;
 use dom::bindings::codegen::Bindings::EventBinding::EventMethods;
@@ -40,7 +41,6 @@ use dom::eventtarget::{EventTarget, EventTargetTypeId};
 use dom::htmlbodyelement::{HTMLBodyElement, HTMLBodyElementHelpers};
 use dom::htmlcollection::HTMLCollection;
 use dom::htmlelement::HTMLElementTypeId;
-use dom::htmlhtmlelement::HTMLHtmlElement;
 use dom::htmlinputelement::{HTMLInputElement, RawLayoutHTMLInputElementHelpers, HTMLInputElementHelpers};
 use dom::htmlserializer::serialize;
 use dom::htmltableelement::{HTMLTableElement, HTMLTableElementHelpers};
@@ -1120,7 +1120,6 @@ impl<'a> ElementMethods for JSRef<'a, Element> {
                                      IsHTMLDocument::HTMLDocument,
                                      None,
                                      DocumentSource::FromParser).root();
-        let document_node: JSRef<Node> = NodeCast::from_ref(document.r());
 
         // 2. If the node document of the context element is in quirks mode,
         //    then let the Document be in quirks mode. Otherwise,
@@ -1129,13 +1128,6 @@ impl<'a> ElementMethods for JSRef<'a, Element> {
         //    leave the Document in no-quirks mode.
         document.r().set_quirks_mode(context_document.r().quirks_mode());
 
-        // 5. Let root be a new html element with no attributes.
-        let root_element = HTMLHtmlElement::new("html".to_owned(), None, document.r()).root();
-        let root_node: JSRef<Node> = NodeCast::from_ref(root_element.r());
-
-        // 6. Append the element root to the Document node created above.
-        try!(document_node.AppendChild(root_node));
-
         // There's got to be a better way. I was getting
         // errors about insufficient lifetimes (form.r()) when I wrote
         // what follows in a less redundant way.
@@ -1143,7 +1135,6 @@ impl<'a> ElementMethods for JSRef<'a, Element> {
         match self.get_form_pointer_for_context().root() {
             None => {
                 let fragment_context = FragmentContext {
-                    root_node: root_node,
                     context_elem: context_node,
                     form_elem: None,
                 };
@@ -1151,7 +1142,6 @@ impl<'a> ElementMethods for JSRef<'a, Element> {
             },
             Some(form) => {
                 let fragment_context = FragmentContext {
-                    root_node: root_node,
                     context_elem: context_node,
                     form_elem: Some(form.r()),
                 };
@@ -1166,6 +1156,8 @@ impl<'a> ElementMethods for JSRef<'a, Element> {
         for child in context_node.children() {
             try!(context_node.RemoveChild(child));
         }
+        let root_element = document.r().GetDocumentElement().expect("no document element").root();
+        let root_node: JSRef<Node> = NodeCast::from_ref(root_element.r());
         for child in root_node.children() {
             try!(context_node.AppendChild(child));
         }

@@ -7,7 +7,6 @@
 
 use dom::bindings::cell::DOMRefCell;
 use dom::bindings::codegen::Bindings::ServoHTMLParserBinding;
-use dom::bindings::codegen::InheritTypes::NodeCast;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::trace::JSTraceable;
 use dom::bindings::js::{JS, JSRef, Temporary};
@@ -30,14 +29,12 @@ use html5ever::tree_builder::{TreeBuilder, TreeBuilderOpts};
 pub struct Sink {
     pub base_url: Option<Url>,
     pub document: JS<Document>,
-    pub root_node: JS<Node>,
 }
 
 /// FragmentContext is used only to pass this group of related values
 /// into functions.
 #[derive(Copy)]
 pub struct FragmentContext<'a> {
-    pub root_node: JSRef<'a, Node>,
     pub context_elem: JSRef<'a, Node>,
     pub form_elem: Option<JSRef<'a, Node>>,
 }
@@ -69,7 +66,6 @@ impl ServoHTMLParser {
         let sink = Sink {
             base_url: base_url,
             document: JS::from_rooted(document),
-            root_node: JS::from_rooted(NodeCast::from_ref(document)),
         };
 
         let tb = TreeBuilder::new(sink, TreeBuilderOpts {
@@ -95,7 +91,6 @@ impl ServoHTMLParser {
         let sink = Sink {
             base_url: base_url,
             document: JS::from_rooted(document),
-            root_node: JS::from_rooted(fragment_context.root_node),
         };
 
         let tb_opts = TreeBuilderOpts {
