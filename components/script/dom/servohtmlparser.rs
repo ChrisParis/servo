@@ -62,7 +62,6 @@ impl Parser for ServoHTMLParser{
 impl ServoHTMLParser {
     #[allow(unrooted_must_root)]
     pub fn new(base_url: Option<Url>, document: JSRef<Document>) -> Temporary<ServoHTMLParser> {
-        let window = document.window().root();
         let sink = Sink {
             base_url: base_url,
             document: JS::from_rooted(document),
@@ -75,19 +74,12 @@ impl ServoHTMLParser {
 
         let tok = tokenizer::Tokenizer::new(tb, Default::default());
 
-        let parser = ServoHTMLParser {
-            reflector_: Reflector::new(),
-            tokenizer: DOMRefCell::new(tok),
-        };
-
-        reflect_dom_object(box parser, GlobalRef::Window(window.r()),
-                           ServoHTMLParserBinding::Wrap)
+        ServoHTMLParser::new_servohtmlparser(document, tok)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new_for_fragment(base_url: Option<Url>, document: JSRef<Document>,
                             fragment_context: FragmentContext) -> Temporary<ServoHTMLParser> {
-        let window = document.window().root();
         let sink = Sink {
             base_url: base_url,
             document: JS::from_rooted(document),
@@ -108,9 +100,17 @@ impl ServoHTMLParser {
         };
         let tok = tokenizer::Tokenizer::new(tb, tok_opts);
 
+        ServoHTMLParser::new_servohtmlparser(document, tok)
+    }
+
+    #[allow(unrooted_must_root)]
+    fn new_servohtmlparser(document: JSRef<Document>,
+                           tokenizer: tokenizer::Tokenizer<TreeBuilder<JS<Node>, Sink>>)
+                           -> Temporary<ServoHTMLParser> {
+        let window = document.window().root();
         let parser = ServoHTMLParser {
             reflector_: Reflector::new(),
-            tokenizer: DOMRefCell::new(tok),
+            tokenizer: DOMRefCell::new(tokenizer),
         };
 
         reflect_dom_object(box parser, GlobalRef::Window(window.r()),
