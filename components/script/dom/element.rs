@@ -418,7 +418,6 @@ pub trait ElementHelpers<'a> {
     fn update_inline_style(self, property_decl: PropertyDeclaration, style_priority: StylePriority);
     fn get_inline_style_declaration(self, property: &Atom) -> Option<PropertyDeclaration>;
     fn get_important_inline_style_declaration(self, property: &Atom) -> Option<PropertyDeclaration>;
-    fn get_form_pointer_for_context(self) -> Option<Temporary<Node>>;
 }
 
 impl<'a> ElementHelpers<'a> for JSRef<'a, Element> {
@@ -563,16 +562,6 @@ impl<'a> ElementHelpers<'a> for JSRef<'a, Element> {
                         .find(|decl| decl.matches(property.as_slice()))
                         .map(|decl| decl.clone())
         })
-    }
-
-    // Return the nearest inclusive ancestor that is a form element.
-    // This is used in the HTML fragment parsing algorithm.
-    // https://html.spec.whatwg.org/multipage/syntax.html#parsing-html-fragments
-    fn get_form_pointer_for_context(self) -> Option<Temporary<Node>> {
-        let root: JSRef<Node> = NodeCast::from_ref(self);
-        root.inclusive_ancestors()
-            .find(|element| element.is_htmlformelement())
-            .map(Temporary::from_rooted)
     }
 }
 
@@ -1128,26 +1117,18 @@ impl<'a> ElementMethods for JSRef<'a, Element> {
         //    leave the Document in no-quirks mode.
         document.r().set_quirks_mode(context_document.r().quirks_mode());
 
-        // There's got to be a better way. I was getting
-        // errors about insufficient lifetimes (form.r()) when I wrote
-        // what follows in a less redundant way.
-
-        match self.get_form_pointer_for_context().root() {
-            None => {
-                let fragment_context = FragmentContext {
-                    context_elem: context_node,
-                    form_elem: None,
-                };
-                parse_html(document.r(), HTMLInput::InputString(value), &url, Some(fragment_context));
-            },
-            Some(form) => {
-                let fragment_context = FragmentContext {
-                    context_elem: context_node,
-                    form_elem: Some(form.r()),
-                };
-                parse_html(document.r(), HTMLInput::InputString(value), &url, Some(fragment_context));
-            }
-        }
+        // 11. Set the parser's form element pointer to the nearest node to
+        //     the context element that is a form element (going straight up
+        //     the ancestor chain, and including the element itself, if it
+        //     is a form element), if any. (If there is no such form element,
+        //     the form element pointer keeps its initial value, null.)
+        let form = context_node.inclusive_ancestors()
+                               .find(|element| element.is_htmlformelement());
+        let fragment_context = FragmentContext {
+            context_elem: context_node,
+            form_elem: form,
+        };
+        parse_html(document.r(), HTMLInput::InputString(value), &url, Some(fragment_context));
 
         // "14. Return the child nodes of root, in tree order."
         // We do this by deleting all nodes of the context node,
